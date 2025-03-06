@@ -1,0 +1,40 @@
+{
+  "name": "lovelystay",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run --exclude '**/e2e/**'",
+    "test:unit:watch": "vitest --exclude '**/e2e/**'",
+    "test:e2e": "NODE_ENV=test vitest run --exclude '**/*.test.ts'",
+    "test:e2e:watch": "NODE_ENV=test vitest --exclude '**/*.test.ts'"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@eslint/js": "^9.21.0",
+    "@types/minimist": "^1.2.5",
+    "eslint": "^9.21.0",
+    "globals": "^16.0.0",
+    "nock": "^13.5.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.25.0",
+    "vitest": "^3.0.7"
+  },
+  "dependencies": {
+    "axios": "^1.8.1",
+    "dotenv": "^16.4.7",
+    "minimist": "^1.2.8",
+    "pg-promise": "^11.10.2",
+    "zod": "^3.24.2"
+  }
+}
