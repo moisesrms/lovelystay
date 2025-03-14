@@ -1,44 +1,22 @@
 import { DbUser, GithubUser, UserWithLanguages } from "../../types";
 import db from "../index";
 
-const getValuesPlaceholder = (columns: string[], startIdx = 1): string => {
-  return columns.map((_, i) => `$${i + startIdx}`).join(", ");
-};
-
-const saveUser = async (user: GithubUser): Promise<number> => {
-  const columns = [
-    "username",
-    "name",
-    "location",
-    "bio",
-    "public_repos",
-    "followers",
-    "following",
-    "created_at",
-    "updated_at",
-    "avatar_url",
-    "html_url",
-    "company",
-  ];
-
-  const values = [
-    user.login,
-    user.name || user.login,
-    user.location,
-    user.bio,
-    user.public_repos,
-    user.followers,
-    user.following,
-    user.created_at,
-    user.updated_at,
-    user.avatar_url,
-    user.html_url,
-    user.company,
-  ];
+const saveUser = async (user: GithubUser): Promise<number | null> => {
+  if (!user.login) {
+    return null
+  }
 
   const query = `
-    INSERT INTO users(${columns.join(", ")})
-    VALUES(${getValuesPlaceholder(columns)})
+    INSERT INTO users(
+      username, name, location, bio, public_repos, 
+      followers, following, created_at, updated_at, 
+      avatar_url, html_url, company
+    )
+    VALUES(
+      $(username), $(name), $(location), $(bio), $(publicRepos),
+      $(followers), $(following), $(createdAt), $(updatedAt),
+      $(avatarUrl), $(htmlUrl), $(company)
+    )
     ON CONFLICT (username)
     DO UPDATE SET
       name = EXCLUDED.name,
@@ -55,11 +33,31 @@ const saveUser = async (user: GithubUser): Promise<number> => {
     RETURNING id
   `;
 
-  return db.one(query, values).then((result) => result.id);
+  try {
+    const result = await db.one(query, {
+      username: user.login,
+      name: user.name || user.login,
+      location: user.location,
+      bio: user.bio,
+      publicRepos: user.public_repos,
+      followers: user.followers,
+      following: user.following,
+      createdAt: user.created_at,
+      updatedAt: user.updated_at,
+      avatarUrl: user.avatar_url,
+      htmlUrl: user.html_url,
+      company: user.company
+    });
+    return result.id;
+  } catch (error) {
+    console.error("Failed to save user:", error);
+    return null
+  }
 };
 
 const findByUsername = async (username: string): Promise<DbUser | null> => {
-  return db.oneOrNone("SELECT * FROM users WHERE username = $1", [username]);
+  return db.oneOrNone("SELECT * FROM users WHERE username " +
+    "= $(username)", { username });
 };
 
 const getAllUsers = async (): Promise<DbUser[]> => {
@@ -68,8 +66,9 @@ const getAllUsers = async (): Promise<DbUser[]> => {
 
 const getUsersByLocation = async (location: string): Promise<DbUser[]> => {
   return db.any(
-    "SELECT * FROM users WHERE LOWER(location) LIKE LOWER($1) " +
-      "ORDER BY username",
+    "SELECT * FROM users WHERE LOWER(location) " +
+    "LIKE LOWER($(locationPattern)) " +
+    "ORDER BY username",
     [`%${location}%`]
   );
 };
@@ -89,34 +88,24 @@ const getUsersWithLanguages = async ({
   `;
 
   const whereConditions: string[] = [];
-  const params: any[] = [];
-  let paramCounter = 1;
+  const params: any = {};
 
   if (location) {
-    whereConditions.push(`LOWER(u.location) LIKE LOWER($${paramCounter})`);
-
-    params.push(`%${location}%`);
-    paramCounter++;
+    whereConditions.push("LOWER(u.location) LIKE LOWER($(locationPattern))");
+    params.locationPattern = `%${location}%`;
   }
 
   if (languages && languages.length > 0) {
-    const placeholders = languages
-      .map((_, index) => `$${paramCounter + index}`)
-      .join(", ");
-
     whereConditions.push(`
       EXISTS (
         SELECT 1 FROM user_languages ul2
         JOIN languages l2 ON ul2.language_id = l2.id
-        WHERE ul2.user_id = u.id AND LOWER(l2.name) IN (${placeholders})
+        WHERE ul2.user_id = u.id AND LOWER(l2.name) IN ($(languages:csv))
       )
     `);
 
-    languages.forEach((lang) => {
-      params.push(lang.toLowerCase());
-    });
-
-    paramCounter += languages.length;
+    // Convert languages to lowercase
+    params.languages = languages.map(lang => lang.toLowerCase());
   }
 
   if (whereConditions.length > 0) {
@@ -125,7 +114,12 @@ const getUsersWithLanguages = async ({
 
   query += " GROUP BY u.id ORDER BY u.username";
 
-  return db.any(query, params);
+  try {
+    return db.any(query, params);
+  } catch (error) {
+    console.error("Failed to get users with languages:", error);
+    return [];
+  }
 };
 
 const deleteAll = async () => {
@@ -138,5 +132,5 @@ export default {
   getAllUsers,
   getUsersByLocation,
   getUsersWithLanguages,
-  deleteAll,
+  deleteAll
 };

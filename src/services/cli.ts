@@ -75,11 +75,16 @@ const fetchAndStoreUser = async (username: string): Promise<void> => {
 
     const userId = await userRepo.saveUser(user);
 
+    if (!userId) {
+      return;
+    }
+
     console.log(`Fetching repositories for ${username}...`);
     const languages = await githubService.getUserLanguages(username);
 
     if (languages.length > 0) {
       console.log(`Found ${languages.length} languages`);
+      await languageRepo.unlinkAllLanguagesFromUser(userId);
       await languageRepo.saveUserLanguages(userId, languages);
     } else {
       console.log("No programming languages found.");
@@ -87,7 +92,7 @@ const fetchAndStoreUser = async (username: string): Promise<void> => {
 
     console.log(
       `User ${username} has been saved to the database ` +
-        `with ${languages.length} programming languages.`
+      `with ${languages.length} programming languages.`
     );
   } catch (error) {
     console.error(`Error fetching and storing user ${username}:`, error);
@@ -163,14 +168,13 @@ const listUsersByLocationAndLanguage = async (
     if (users.length === 0) {
       console.log(
         `No users found with location matching` +
-          `"${location}" who use ${languages.join(", ")}.`
+        `"${location}" who use ${languages.join(", ")}.`
       );
       return;
     }
 
     console.log(
-      `Found ${
-        users.length
+      `Found ${users.length
       } users with location matching "${location}" who use ${languages.join(
         ","
       )}:\n`
@@ -179,8 +183,8 @@ const listUsersByLocationAndLanguage = async (
   } catch (error) {
     console.error(
       `Error listing users by location ` +
-        `"${location}" and language ` +
-        `"${languages.join(",")}":`,
+      `"${location}" and language ` +
+      `"${languages.join(",")}":`,
       error
     );
     throw error;
@@ -216,5 +220,6 @@ export {
   listUsersByLanguage,
   listUsersByLocation,
   listUsersByLocationAndLanguage,
-  printHelp,
+  printHelp
 };
+

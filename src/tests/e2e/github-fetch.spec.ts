@@ -212,4 +212,84 @@ describe("GitHub User Fetch E2E", () => {
     });
     expect(nonExistentLocationUsers).toHaveLength(0);
   });
+
+  it("should update user languages when repositories change between fetches", async () => {
+    // Clean up before test
+    await userRepo.deleteAll();
+
+    // First fetch with initial repositories
+    await fetchAndStoreUser("testuser");
+
+    const savedUser = await userRepo.findByUsername("testuser");
+    expect(savedUser).toBeTruthy();
+
+    // Check initial languages
+    const initialLanguages = await languageRepo.getUserLanguages(savedUser!.id);
+    expect(initialLanguages).toHaveLength(4);
+    expect(initialLanguages).toContain("JavaScript");
+    expect(initialLanguages).toContain("TypeScript");
+    expect(initialLanguages).toContain("HTML");
+    expect(initialLanguages).toContain("CSS");
+
+    // Setup mock for second fetch with changed repositories
+    nock.cleanAll();
+
+    // Same user data
+    nock("https://api.github.com")
+      .get("/users/testuser")
+      .query(true)
+      .reply(200, mockUser);
+
+    // Updated repositories: removed one repo, added a new one
+    const updatedMockRepos = [
+      // test-repo-1 is removed
+      {
+        id: 2,
+        name: "test-repo-2",
+        language: "TypeScript",
+        languages_url: "https://api.github.com/repos/testuser/test-repo-2/languages",
+        html_url: "https://github.com/testuser/test-repo-2",
+      },
+      {
+        id: 3,
+        name: "test-repo-3",
+        language: "Python",
+        languages_url: "https://api.github.com/repos/testuser/test-repo-3/languages",
+        html_url: "https://github.com/testuser/test-repo-3",
+      }
+    ];
+
+    nock("https://api.github.com")
+      .get("/users/testuser/repos")
+      .query(true)
+      .reply(200, updatedMockRepos);
+
+    // Languages for the remaining and new repos
+    nock("https://api.github.com")
+      .get("/repos/testuser/test-repo-2/languages")
+      .query(true)
+      .reply(200, mockLanguages2);
+
+    nock("https://api.github.com")
+      .get("/repos/testuser/test-repo-3/languages")
+      .query(true)
+      .reply(200, {
+        Python: 15000,
+        JavaScript: 2000
+      });
+
+    // Second fetch with updated repositories
+    await fetchAndStoreUser("testuser");
+
+    // Check updated languages
+    const updatedLanguages = await languageRepo.getUserLanguages(savedUser!.id);
+    expect(updatedLanguages).toHaveLength(3);
+    expect(updatedLanguages).toContain("JavaScript");
+    expect(updatedLanguages).toContain("TypeScript");
+    expect(updatedLanguages).toContain("Python");
+
+    // HTML and CSS should no longer be present (they were only in test-repo-1)
+    expect(updatedLanguages).not.toContain("HTML");
+    expect(updatedLanguages).not.toContain("CSS");
+  });
 });
